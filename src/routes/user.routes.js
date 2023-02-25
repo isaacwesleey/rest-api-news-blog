@@ -1,7 +1,6 @@
 import { Router } from 'express';
 
 import {
-  getUsers,
   createUser,
   deleteUser,
   updateUser,
@@ -13,8 +12,6 @@ import { authentication } from '../middlewares/authentication.js';
 import { checkNewsOwnership } from '../middlewares/authorization.js';
 
 const router = Router();
-
-// router.get('/user', getUsers);
 
 router.get('/user/:id', authentication, getUserById); // ✅
 

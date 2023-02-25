@@ -18,8 +18,8 @@ router.get('/news/:id', getNewsById); // ✅
 
 router.post('/news', authentication, createNews); // ✅
 
-router.patch('/news/:id', authentication, checkNewsOwnership, updateNews);
+router.patch('/news/:id', authentication, checkNewsOwnership, updateNews); // ✅
 
-router.delete('/news/:id', authentication, checkNewsOwnership, deleteNews);
+router.delete('/news/:id', authentication, checkNewsOwnership, deleteNews); // ✅
 
 export default router;

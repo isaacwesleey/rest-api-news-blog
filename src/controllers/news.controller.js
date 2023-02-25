@@ -1,20 +1,25 @@
 import { pool } from '../db.js';
+import { generateError } from '../helpers.js';
+import { savePhoto } from '../helpers.js';
 
 // getNews is a function that returns all news items
 
 export const getNews = async (req, res, next) => {
   try {
     const [result] = await pool.query(
-      'SELECT id, title, content, lede, theme, created_at FROM news ORDER BY created_at DESC LIMIT 10'
+      'SELECT * FROM news ORDER BY created_at DESC LIMIT 10'
     );
 
     if (!result.length) {
-      return res.status(404).json({
-        message: 'No news found',
-      });
+      generateError('No news found', 404);
     }
 
-    res.json({ result });
+    res.send({
+      status: 'ok',
+      data: {
+        news: result,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -23,37 +28,46 @@ export const getNews = async (req, res, next) => {
 // createNews is a function that creates a single news item
 
 export const createNews = async (req, res, next) => {
-  const { title, content, lede, theme } = req.body;
   try {
+    const { title, content, lede, theme } = req.body;
+
     if (!title || !content || !lede || !theme) {
-      return res.status(400).json({
-        message: 'Missing required fields (title, content, lede, and theme)',
-      });
+      generateError('All fields are required', 400);
+    }
+
+    let image;
+
+    // If there is an image, save it and get the filename
+    if (req.files?.image) {
+      image = await savePhoto(req.files.image);
     }
 
     const { id } = req.auth;
 
     const [result] = await pool.query(
-      'INSERT INTO news (title, content, lede, theme, user_id) VALUES (?, ?, ?, ?, ?)',
-      [title, content, lede, theme, id]
+      'INSERT INTO news (user_id, title, content, lede, theme, image, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, title, content, lede, theme, image, new Date()]
     );
 
     const newsId = result.insertId;
 
-    res.status(201).json({
-      message: 'News created successfully',
-      news: {
-        id: newsId,
-        title: title,
-        content: content,
-        lede: lede,
-        theme: theme,
-        user_id: id,
-        created_at: new Date(),
+    res.send({
+      status: 'ok',
+      data: {
+        news: {
+          id: newsId,
+          user_id: id,
+          title,
+          content,
+          lede,
+          theme,
+          image,
+          created_at: new Date(),
+        },
       },
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -65,12 +79,15 @@ export const deleteNews = async (req, res, next) => {
     const [result] = await pool.query('DELETE FROM news WHERE id = ?', [id]);
 
     if (!result.affectedRows) {
-      return res.status(404).json({
-        message: `News with id ${id} not found`,
-      });
+      generateError(`News with id ${id} not found`, 404);
     }
 
-    res.status(204).end();
+    res.send({
+      status: 'ok',
+      data: {
+        message: `News with id ${id} deleted`,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -79,21 +96,30 @@ export const deleteNews = async (req, res, next) => {
 // updateNews is a function that updates a single news item
 
 export const updateNews = async (req, res, next) => {
-  const { id } = req.params;
-  const { title, content, lede, theme } = req.body;
   try {
+    const { id } = req.params;
+    const { title, content, lede, theme } = req.body;
+
     const [result] = await pool.query(
       'UPDATE news SET title = ?, content = ?, lede = ?, theme = ? WHERE id = ?',
       [title, content, lede, theme, id]
     );
 
     if (!result.affectedRows) {
-      return res.status(404).json({
-        message: `News with id ${id} not found`,
-      });
+      generateError(`News with id ${id} not found`, 404);
     }
 
-    res.status(204).end();
+    res.send({
+      status: 'ok',
+      data: {
+        id: id,
+        title: title,
+        content: content,
+        lede: lede,
+        theme: theme,
+        created_at: new Date(),
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -105,19 +131,20 @@ export const getNewsById = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    let result = await pool.query(
-      'SELECT id, title, content, lede, theme, created_at FROM news WHERE id = ?',
-      [id]
-    );
+    let result = await pool.query('SELECT * FROM news WHERE id = ?', [id]);
+
     result = result[0];
 
-    if (!result) {
-      return res.status(404).json({
-        message: `News with id ${id} not found`,
-      });
+    if (!result.length) {
+      generateError(`News with id ${id} not found`, 404);
     }
 
-    res.json({ result });
+    res.send({
+      status: 'ok',
+      data: {
+        news: result,
+      },
+    });
   } catch (error) {
     next(error);
   }

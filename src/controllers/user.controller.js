@@ -1,10 +1,8 @@
 import { pool } from '../db.js';
 import bcrypt from 'bcrypt';
-import { generateError } from '../helpers.js';
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
 
-dotenv.config();
+import { generateError } from '../helpers.js';
 
 // getUsers is a function that returns all users
 
@@ -50,7 +48,14 @@ export const createUser = async (req, res, next) => {
     );
 
     const newUserId = result.insertId;
-    res.status(201).send({ message: 'Usuario creado', id: newUserId });
+    res.send({
+      status: 'ok',
+      data: {
+        id: newUserId,
+        email: email,
+        name: name,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -61,15 +66,35 @@ export const createUser = async (req, res, next) => {
 export const deleteUser = async (req, res, next) => {
   const { id } = req.params;
   try {
-    const [result] = await pool.query('DELETE FROM news WHERE id = ?', [id]);
+    // Buscar el usuario que se quiere eliminar
+    const [user] = await pool.query('SELECT id FROM users WHERE id = ?', [id]);
 
-    if (!result.affectedRows) {
+    if (user.length === 0) {
       return res.status(404).json({
-        message: `News with id ${id} not found`,
+        message: `User with id ${id} not found`,
       });
     }
 
-    res.status(204).end();
+    // Verificar si el usuario autenticado es el propietario del usuario que se quiere eliminar
+    if (req.auth.id !== Number(id)) {
+      generateError('No tienes permisos para eliminar este usuario', 403);
+    }
+
+    // Eliminar el usuario
+    const [result] = await pool.query('DELETE FROM users WHERE id = ?', [id]);
+
+    if (!result.affectedRows) {
+      return res.status(404).json({
+        message: `User with id ${id} not found`,
+      });
+    }
+
+    res.send({
+      status: 'ok',
+      data: {
+        id: id,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -82,6 +107,11 @@ export const updateUser = async (req, res, next) => {
   const { email, password, name } = req.body;
 
   try {
+    // Verificar si el usuario autenticado es el propietario de la información
+    if (req.auth.id !== Number(id)) {
+      generateError('No tienes permisos para editar esta información', 403);
+    }
+
     const [result] = await pool.query(
       `UPDATE users SET email = ?, password = ?, name = ? WHERE id = ?`,
       [email, password, name, id]
@@ -93,8 +123,13 @@ export const updateUser = async (req, res, next) => {
       });
     }
 
-    res.status(200).json({
-      message: `User with id ${id} updated`,
+    res.send({
+      status: 'ok',
+      data: {
+        id: id,
+        email: email,
+        name: name,
+      },
     });
   } catch (error) {
     next(error);
@@ -106,22 +141,27 @@ export const updateUser = async (req, res, next) => {
 export const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
+
     const [user] = await pool.query(
       `SELECT id, email, name FROM users WHERE id = ?`,
       [Number(id)]
     );
     // El usuario solo puede ver su propia información (no la de otros usuarios)
     if (req.auth.id !== Number(id)) {
-      throw generateError('No tienes permisos para ver esta información', 403);
+      generateError('No tienes permisos para ver esta información', 403);
     }
 
     if (user.length === 0) {
-      throw generateError(`Usuario con id ${id} no encontrado`, 404);
+      generateError(`Usuario con id ${id} no encontrado`, 404);
     }
 
-    res.status(200).send({
+    res.send({
       status: 'ok',
-      data: user[0],
+      data: {
+        id: user[0].id,
+        email: user[0].email,
+        name: user[0].name,
+      },
     });
   } catch (error) {
     next(error);
@@ -146,7 +186,7 @@ export const loginUser = async (req, res, next) => {
     if (user.length === 0) {
       throw generateError(`Usuario con email ${email} no encontrado`, 404);
     }
-
+    // Comparamos la contraseña que nos llega con la que tenemos en la base de datos
     const passwordHash = user[0].password;
 
     const passwordsMatch = await bcrypt.compare(password, passwordHash);
@@ -166,8 +206,11 @@ export const loginUser = async (req, res, next) => {
       }
     );
 
-    res.status(200).send({
-      token,
+    res.send({
+      status: 'ok',
+      data: {
+        token,
+      },
     });
   } catch (error) {
     next(error);
