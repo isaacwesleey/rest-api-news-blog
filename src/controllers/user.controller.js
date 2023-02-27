@@ -8,7 +8,7 @@ import { generateError } from '../helpers.js';
 
 export const getUsers = async (req, res, next) => {
   try {
-    const [users] = await pool.query('SELECT id, email, name FROM users');
+    const [users] = await pool.query('SELECT * FROM users');
 
     res.status(200).send({
       status: 'ok',
@@ -107,6 +107,10 @@ export const updateUser = async (req, res, next) => {
   const { email, password, name } = req.body;
 
   try {
+    if (!email || !password || !name) {
+      generateError('Faltan campos', 400);
+    }
+
     // Verificar si el usuario autenticado es el propietario de la información
     if (req.auth.id !== Number(id)) {
       generateError('No tienes permisos para editar esta información', 403);

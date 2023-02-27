@@ -19,8 +19,8 @@ router.post('/user', createUser); // ✅
 
 router.post('/login', loginUser); // ✅
 
-router.patch('/user/:id', authentication, updateUser);
+router.patch('/user/:id', authentication, updateUser); // ✅
 
-router.delete('/user/:id', authentication, deleteUser);
+router.delete('/user/:id', authentication, deleteUser); // ✅
 
 export default router;

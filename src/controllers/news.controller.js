@@ -1,13 +1,21 @@
 import { pool } from '../db.js';
 import { generateError } from '../helpers.js';
 import { savePhoto } from '../helpers.js';
-
+import { deletePhoto } from '../helpers.js';
 // getNews is a function that returns all news items
 
 export const getNews = async (req, res, next) => {
   try {
+    let keyword = '';
+    if (req.query.keyword) {
+      keyword = req.query.keyword;
+    }
     const [result] = await pool.query(
-      'SELECT * FROM news ORDER BY created_at DESC LIMIT 10'
+      `SELECT * FROM news 
+      WHERE content LIKE ? 
+      ORDER BY created_at 
+      DESC LIMIT 10`,
+      [`${keyword}%`]
     );
 
     if (!result.length) {
@@ -74,13 +82,23 @@ export const createNews = async (req, res, next) => {
 // deleteNews is a function that deletes a single news item
 
 export const deleteNews = async (req, res, next) => {
-  const { id } = req.params;
   try {
-    const [result] = await pool.query('DELETE FROM news WHERE id = ?', [id]);
+    const { id } = req.params;
 
-    if (!result.affectedRows) {
+    const [result] = await pool.query('SELECT * FROM news WHERE id = ?', [id]);
+
+    if (!result.length) {
       generateError(`News with id ${id} not found`, 404);
     }
+
+    // Si la noticia tiene una imagen vinculada la borramos de la carpeta "uploads".
+    if (result[0].image) {
+      await deletePhoto(result[0].image);
+    }
+
+    const [deleteResult] = await pool.query('DELETE FROM news WHERE id = ?', [
+      id,
+    ]);
 
     res.send({
       status: 'ok',
@@ -98,11 +116,30 @@ export const deleteNews = async (req, res, next) => {
 export const updateNews = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, content, lede, theme } = req.body;
+
+    const { title, content, lede, theme, image } = req.body;
+
+    const [news] = await pool.query('SELECT * FROM news WHERE id = ?', [id]);
+    if (!news.length) {
+      generateError(`News with id ${id} not found`, 404);
+    }
+
+    const oldTitle = news[0].title;
+    const oldContent = news[0].content;
+    const oldLede = news[0].lede;
+    const oldTheme = news[0].theme;
+    const oldImage = news[0].image;
+
+    const newTitle = title === undefined || title === '' ? oldTitle : title;
+    const newContent =
+      content === undefined || content === '' ? oldContent : content;
+    const newLede = lede === undefined || lede === '' ? oldLede : lede;
+    const newTheme = theme === undefined || theme === '' ? oldTheme : theme;
+    const newImage = image === undefined || image === '' ? oldImage : image;
 
     const [result] = await pool.query(
-      'UPDATE news SET title = ?, content = ?, lede = ?, theme = ? WHERE id = ?',
-      [title, content, lede, theme, id]
+      'UPDATE news SET title = ?, content = ?, lede = ?, theme = ?, image = ? WHERE id = ?',
+      [newTitle, newContent, newLede, newTheme, newImage, id]
     );
 
     if (!result.affectedRows) {
@@ -113,11 +150,12 @@ export const updateNews = async (req, res, next) => {
       status: 'ok',
       data: {
         id: id,
-        title: title,
-        content: content,
-        lede: lede,
-        theme: theme,
-        created_at: new Date(),
+        title: newTitle,
+        content: newContent,
+        lede: newLede,
+        theme: newTheme,
+        image: newImage,
+        created_at: news[0].created_at,
       },
     });
   } catch (error) {
